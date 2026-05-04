@@ -8,11 +8,9 @@ SOLVED     = 500
 INFEASIBLE = 600
 
 
-# ── Phase II ──────────────────────────────────────────────────────────────────
-
 # iterate_basis(basis, lp) finds an entering and leaving variable for an LP
 # in canonical form using Bland's rule
-def iterate_basis(basis, lp):
+def iterate_basis(basis, lp, verbose=True):
     # find an entering variable
     k = -1
     for i in range(lp.n):
@@ -21,7 +19,8 @@ def iterate_basis(basis, lp):
             break
     # if no entering variable found, return original basis
     if k == -1:
-        print("No entering variables exist, basis is optimal.")
+        if verbose:
+            print("No entering variables exist, basis is optimal.")
         return SOLVED
 
     ratios = np.full(lp.m, np.inf)
@@ -32,12 +31,13 @@ def iterate_basis(basis, lp):
             ratios[j] = lp.b[j] / lp.A[j, k]
 
     l = np.argmin(ratios)
-    if ratios[l] == np.inf:
+    if np.isinf(ratios[l]):
         return UNBOUNDED
     else:
-        print(f"Leaving variable: {l}")
-        print(f"Entering variable: {k}")
-        print(f"New basis: " + ", ".join(f"{basis[i]}" for i in range(lp.m)))
+        if verbose:
+            print(f"Leaving variable: {basis[l]}")
+            print(f"Entering variable: {k}")
+            print(f"New basis: " + ", ".join(f"{basis[i]}" for i in range(lp.m)))
         basis = [x for x in basis if x != basis[l]] + [k]
         basis.sort()
         return basis
@@ -45,11 +45,16 @@ def iterate_basis(basis, lp):
 
 # simplex(basis, lp) performs simplex iterations on lp until a result is found.
 #   If optimal, returns the optimal basis; otherwise returns UNBOUNDED.
-def simplex(basis, lp):
-    print("Performing simplex with starting basis: " + ", ".join(f"{basis[i]}" for i in range(lp.m)))
+#   verbose=False suppresses all output (used during Phase I).
+def simplex(basis, lp, verbose=True):
+    if verbose:
+        print("Performing simplex with starting basis: " + ", ".join(f"{basis[i]}" for i in range(lp.m)))
     while True:
         canonical = lp.canonical_form(basis)
-        result = iterate_basis(basis, canonical)
+        if verbose:
+            print("The canonical form is:")
+            canonical.display()
+        result = iterate_basis(basis, canonical, verbose=verbose)
 
         if result == SOLVED:
             return basis
@@ -72,8 +77,6 @@ def print_result(basis, lp):
         print(f"Optimal value: {obj:g}")
 
 
-# ── Phase I ───────────────────────────────────────────────────────────────────
-
 # initial_feasible(lp) finds an initial feasible basis for lp via the
 #   auxiliary problem method (Big-M / two-phase setup)
 def initial_feasible(lp):
@@ -81,19 +84,26 @@ def initial_feasible(lp):
     m, n = lp.A.shape
     aux = lp.SEF().aux()
     basis = list(range(n + m, n + 2*m))
-    result = simplex(basis, aux)
+    result = simplex(basis, aux, verbose=False)
     if result == INFEASIBLE or result == UNBOUNDED:
         return INFEASIBLE
     else:
         x, obj = aux.get_solution(result)
-    if not obj == 0:
+    if not np.isclose(obj, 0):
         return INFEASIBLE
-    else:
-        basis = [b for b in result if b < n + m]
-        return basis
+    
+    clean_basis = [b for b in result if b < n + m]
 
+    # if basis is short, find replacement columns
+    for j in range(n + m):
+        if len(clean_basis) == m:
+            break
+        if j not in clean_basis:
+            clean_basis.append(j)
 
-# ── Top-level solver ──────────────────────────────────────────────────────────
+    clean_basis.sort()
+    return clean_basis
+
 
 # solve(lp) runs the full two-phase simplex on lp and prints the result
 #   in terms of the original variables (excluding SEF slack variables).

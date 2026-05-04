@@ -3,9 +3,9 @@ import numpy as np
 
 # fmt(x) returns x as a coefficient for a linear equation. Returns an empty string if x = 1.
 def fmt(x):
-    if x == 1:
+    if np.isclose(x, 1):
         return ""
-    elif x == -1:
+    elif np.isclose(x, -1):
         return "-"
     else:
         return f"{x:g}"
@@ -53,7 +53,7 @@ class LP:
         for j in range(self.m):
             terms = []
             for i in range(self.n):
-                if self.A[j, i] == 0:
+                if np.isclose(self.A[j, i], 0):
                     continue
                 if terms and self.A[j, i] < 0:
                     terms.append("- " + fmt(abs(self.A[j, i])) + f"x{i+1}")
@@ -79,8 +79,6 @@ class LP:
         c_prime = self.c - c_basic @ A_prime
 
         canonical_lp = LP(A_prime, b_prime, c_prime)
-        print("The canonical form is:")
-        canonical_lp.display()
         return canonical_lp
 
     # get_solution(basis) returns the primal solution and objective value for the given basis
